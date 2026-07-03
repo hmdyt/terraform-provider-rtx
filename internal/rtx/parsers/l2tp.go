@@ -30,10 +30,17 @@ type L2TPConfig struct {
 
 // L2TPAuth represents L2TPv2 authentication configuration
 type L2TPAuth struct {
-	Method        string `json:"method,omitempty"`         // pp auth accept: pap, chap, mschap, mschap-v2
-	RequestMethod string `json:"request_method,omitempty"` // pp auth request: pap, chap, mschap, mschap-v2
-	Username      string `json:"username,omitempty"`       // Local username
-	Password      string `json:"password,omitempty"`       // Local password
+	Method        string     `json:"method,omitempty"`         // pp auth accept: pap, chap, mschap, mschap-v2
+	RequestMethod string     `json:"request_method,omitempty"` // pp auth request: pap, chap, mschap, mschap-v2
+	Username      string     `json:"username,omitempty"`       // Local username (pp auth myname)
+	Password      string     `json:"password,omitempty"`       // Local password (pp auth myname)
+	Users         []L2TPUser `json:"users,omitempty"`          // Remote access users (pp auth username)
+}
+
+// L2TPUser represents a remote access VPN user (pp auth username)
+type L2TPUser struct {
+	Name     string `json:"name"`     // Username
+	Password string `json:"password"` // Password
 }
 
 // L2TPIPPool represents L2TPv2 IP pool configuration
@@ -92,6 +99,7 @@ func (p *L2TPParser) ParseL2TPConfig(raw string) ([]L2TPConfig, error) {
 	ppAuthAcceptPattern := regexp.MustCompile(`^\s*pp\s+auth\s+accept\s+(\S+)\s*$`)
 	ppAuthRequestPattern := regexp.MustCompile(`^\s*pp\s+auth\s+request\s+(\S+)\s*$`)
 	ppAuthMynamePattern := regexp.MustCompile(`^\s*pp\s+auth\s+myname\s+(\S+)\s+(\S+)\s*$`)
+	ppAuthUsernamePattern := regexp.MustCompile(`^\s*pp\s+auth\s+username\s+(\S+)\s+(\S+)\s*$`)
 	ipPPRemotePoolPattern := regexp.MustCompile(`^\s*ip\s+pp\s+remote\s+address\s+pool\s+([0-9.]+)-([0-9.]+)\s*$`)
 
 	// L2TPv3 patterns
@@ -181,6 +189,20 @@ func (p *L2TPParser) ParseL2TPConfig(raw string) ([]L2TPConfig, error) {
 				}
 				currentAnonymousConfig.Authentication.Username = matches[1]
 				currentAnonymousConfig.Authentication.Password = matches[2]
+			}
+			continue
+		}
+
+		// PP auth username (remote access users)
+		if matches := ppAuthUsernamePattern.FindStringSubmatch(line); len(matches) >= 3 && inAnonymousPP {
+			if currentAnonymousConfig != nil {
+				if currentAnonymousConfig.Authentication == nil {
+					currentAnonymousConfig.Authentication = &L2TPAuth{}
+				}
+				currentAnonymousConfig.Authentication.Users = append(currentAnonymousConfig.Authentication.Users, L2TPUser{
+					Name:     matches[1],
+					Password: matches[2],
+				})
 			}
 			continue
 		}
@@ -420,6 +442,12 @@ func BuildPPAuthRequestCommand(method string) string {
 // Command format: pp auth myname <username> <password>
 func BuildPPAuthMynameCommand(username, password string) string {
 	return fmt.Sprintf("pp auth myname %s %s", username, password)
+}
+
+// BuildPPAuthUsernameCommand builds the command to register a remote access user
+// Command format: pp auth username <username> <password>
+func BuildPPAuthUsernameCommand(username, password string) string {
+	return fmt.Sprintf("pp auth username %s %s", username, password)
 }
 
 // BuildIPPPRemotePoolCommand builds the command to set IP pool

@@ -34,6 +34,7 @@ type TunnelIPsec struct {
 	IKEv2Proposal     IKEv2Proposal         `json:"ikev2_proposal"`                 // IKE Phase 1 proposal
 	Transform         IPsecTransform        `json:"transform"`                      // IPsec Phase 2 transform
 	Keepalive         *TunnelIPsecKeepalive `json:"keepalive,omitempty"`            // DPD/heartbeat settings
+	AutoRefresh       bool                  `json:"auto_refresh,omitempty"`         // ipsec auto refresh on (global)
 	SecureFilterIn    []int                 `json:"secure_filter_in,omitempty"`     // ip tunnel secure filter in
 	SecureFilterOut   []int                 `json:"secure_filter_out,omitempty"`    // ip tunnel secure filter out
 	TCPMSSLimit       string                `json:"tcp_mss_limit,omitempty"`        // ip tunnel tcp mss limit
@@ -66,6 +67,10 @@ type TunnelL2TP struct {
 	// L2TPv2 specific (remote access)
 	Authentication *L2TPAuth   `json:"authentication,omitempty"` // PPP authentication
 	IPPool         *L2TPIPPool `json:"ip_pool,omitempty"`        // Client IP pool
+	IPCPIPAddress  bool        `json:"ipcp_ipaddress,omitempty"` // ppp ipcp ipaddress on
+	IPCPMSExt      bool        `json:"ipcp_msext,omitempty"`     // ppp ipcp msext on
+	CCPTypeNone    bool        `json:"ccp_type_none,omitempty"`  // ppp ccp type none
+	MTU            int         `json:"mtu,omitempty"`            // ip pp mtu
 }
 
 // TunnelL2TPKeepalive represents L2TP keepalive settings within a tunnel
@@ -113,6 +118,8 @@ func (p *TunnelParser) ParseTunnelConfig(raw string) ([]Tunnel, error) {
 	ipsecIKEKeepaliveRetryPattern := regexp.MustCompile(`^\s*ipsec\s+ike\s+keepalive\s+use\s+(\d+)\s+on\s+dpd\s+(\d+)\s+(\d+)\s*$`)
 	ipsecIKEKeepalivePattern := regexp.MustCompile(`^\s*ipsec\s+ike\s+keepalive\s+use\s+(\d+)\s+on\s+dpd\s+(\d+)\s*$`)
 	ipsecIKEKeepaliveHeartbeatPattern := regexp.MustCompile(`^\s*ipsec\s+ike\s+keepalive\s+use\s+(\d+)\s+on\s+heartbeat\s+(\d+)\s+(\d+)\s*$`)
+	ipsecIKEKeepaliveOffPattern := regexp.MustCompile(`^\s*ipsec\s+ike\s+keepalive\s+use\s+(\d+)\s+off\s*$`)
+	ipsecAutoRefreshPattern := regexp.MustCompile(`^\s*ipsec\s+auto\s+refresh\s+on\s*$`)
 	ipsecIKENATTraversalPattern := regexp.MustCompile(`^\s*ipsec\s+ike\s+nat-traversal\s+(\d+)\s+(on|off)\s*$`)
 	ipsecIKERemoteNamePattern := regexp.MustCompile(`^\s*ipsec\s+ike\s+remote\s+name\s+(\d+)\s+(\S+)\s+(\S+)\s*$`)
 	ipsecIKEKeepaliveLogPattern := regexp.MustCompile(`^\s*ipsec\s+ike\s+keepalive\s+log\s+(\d+)\s+(on|off)\s*$`)
@@ -138,13 +145,23 @@ func (p *TunnelParser) ParseTunnelConfig(raw string) ([]Tunnel, error) {
 	ppAuthAcceptPattern := regexp.MustCompile(`^\s*pp\s+auth\s+accept\s+(\S+)\s*$`)
 	ppAuthRequestPattern := regexp.MustCompile(`^\s*pp\s+auth\s+request\s+(\S+)\s*$`)
 	ppAuthMynamePattern := regexp.MustCompile(`^\s*pp\s+auth\s+myname\s+(\S+)\s+(\S+)\s*$`)
+	ppAuthUsernamePattern := regexp.MustCompile(`^\s*pp\s+auth\s+username\s+(\S+)\s+(\S+)\s*$`)
 	ipPPRemotePoolPattern := regexp.MustCompile(`^\s*ip\s+pp\s+remote\s+address\s+pool\s+([0-9.]+)-([0-9.]+)\s*$`)
+	pppIPCPIPAddressPattern := regexp.MustCompile(`^\s*ppp\s+ipcp\s+ipaddress\s+(on|off)\s*$`)
+	pppIPCPMSExtPattern := regexp.MustCompile(`^\s*ppp\s+ipcp\s+msext\s+(on|off)\s*$`)
+	pppCCPTypePattern := regexp.MustCompile(`^\s*ppp\s+ccp\s+type\s+(\S+)\s*$`)
+	ipPPMTUPattern := regexp.MustCompile(`^\s*ip\s+pp\s+mtu\s+(\d+)\s*$`)
 
 	var currentTunnelID int
 	var inAnonymousPP bool
 	var anonymousPPTunnelID int
 	var anonymousAuth *L2TPAuth
 	var anonymousIPPool *L2TPIPPool
+	var anonymousIPCPIPAddress bool
+	var anonymousIPCPMSExt bool
+	var anonymousCCPTypeNone bool
+	var anonymousMTU int
+	var autoRefreshOn bool
 
 	// resolveIKETunnel returns the tunnel associated with an IKE command line.
 	// Real RTX1210 `show config` / config0 places some `ipsec ike *` lines at
@@ -343,6 +360,23 @@ func (p *TunnelParser) ParseTunnelConfig(raw string) ([]Tunnel, error) {
 					Retry:    retry,
 				}
 			}
+			continue
+		}
+
+		// IPsec IKE keepalive off (explicit)
+		if matches := ipsecIKEKeepaliveOffPattern.FindStringSubmatch(line); len(matches) >= 2 {
+			if tunnel := resolveIKETunnel(matches[1]); tunnel != nil && tunnel.IPsec != nil {
+				tunnel.IPsec.Keepalive = &TunnelIPsecKeepalive{
+					Enabled: false,
+					Mode:    "off",
+				}
+			}
+			continue
+		}
+
+		// IPsec auto refresh (global)
+		if ipsecAutoRefreshPattern.MatchString(line) {
+			autoRefreshOn = true
 			continue
 		}
 
@@ -577,12 +611,48 @@ func (p *TunnelParser) ParseTunnelConfig(raw string) ([]Tunnel, error) {
 			continue
 		}
 
+		// PP auth username (L2TPv2 remote access users)
+		if matches := ppAuthUsernamePattern.FindStringSubmatch(line); len(matches) >= 3 && inAnonymousPP {
+			if anonymousAuth == nil {
+				anonymousAuth = &L2TPAuth{}
+			}
+			anonymousAuth.Users = append(anonymousAuth.Users, L2TPUser{
+				Name:     matches[1],
+				Password: matches[2],
+			})
+			continue
+		}
+
 		// IP PP remote address pool (L2TPv2)
 		if matches := ipPPRemotePoolPattern.FindStringSubmatch(line); len(matches) >= 3 && inAnonymousPP {
 			anonymousIPPool = &L2TPIPPool{
 				Start: matches[1],
 				End:   matches[2],
 			}
+			continue
+		}
+
+		// PPP IPCP ipaddress (L2TPv2)
+		if matches := pppIPCPIPAddressPattern.FindStringSubmatch(line); len(matches) >= 2 && inAnonymousPP {
+			anonymousIPCPIPAddress = matches[1] == "on"
+			continue
+		}
+
+		// PPP IPCP msext (L2TPv2)
+		if matches := pppIPCPMSExtPattern.FindStringSubmatch(line); len(matches) >= 2 && inAnonymousPP {
+			anonymousIPCPMSExt = matches[1] == "on"
+			continue
+		}
+
+		// PPP CCP type (L2TPv2)
+		if matches := pppCCPTypePattern.FindStringSubmatch(line); len(matches) >= 2 && inAnonymousPP {
+			anonymousCCPTypeNone = matches[1] == "none"
+			continue
+		}
+
+		// IP PP MTU (L2TPv2)
+		if matches := ipPPMTUPattern.FindStringSubmatch(line); len(matches) >= 2 && inAnonymousPP {
+			anonymousMTU, _ = strconv.Atoi(matches[1])
 			continue
 		}
 
@@ -604,6 +674,19 @@ func (p *TunnelParser) ParseTunnelConfig(raw string) ([]Tunnel, error) {
 			}
 			tunnel.L2TP.Authentication = anonymousAuth
 			tunnel.L2TP.IPPool = anonymousIPPool
+			tunnel.L2TP.IPCPIPAddress = anonymousIPCPIPAddress
+			tunnel.L2TP.IPCPMSExt = anonymousIPCPMSExt
+			tunnel.L2TP.CCPTypeNone = anonymousCCPTypeNone
+			tunnel.L2TP.MTU = anonymousMTU
+		}
+	}
+
+	// Apply global ipsec auto refresh to all IPsec-enabled tunnels
+	if autoRefreshOn {
+		for _, tunnel := range tunnels {
+			if tunnel.IPsec != nil {
+				tunnel.IPsec.AutoRefresh = true
+			}
 		}
 	}
 
@@ -655,7 +738,73 @@ func BuildTunnelCommands(tunnel Tunnel) []string {
 		commands = append(commands, BuildTunnelEnableCommand(tunnel.ID))
 	}
 
+	// ipsec auto refresh (global, required for SA rekeying)
+	if tunnel.IPsec != nil && tunnel.IPsec.AutoRefresh {
+		commands = append(commands, BuildIPsecAutoRefreshCommand(true))
+	}
+
+	// Anonymous PP commands (L2TPv2 remote access)
+	if tunnel.Encapsulation == "l2tp" && tunnel.L2TP != nil && (tunnel.L2TP.Authentication != nil || tunnel.L2TP.IPPool != nil) {
+		commands = append(commands, buildAnonymousPPCommands(tunnel.ID, tunnel.L2TP)...)
+	}
+
 	return commands
+}
+
+// buildAnonymousPPCommands builds the anonymous PP context commands for
+// L2TPv2 remote access (LNS). The block is terminated with "pp select none"
+// to return to the global context.
+func buildAnonymousPPCommands(tunnelID int, l2tp *TunnelL2TP) []string {
+	commands := []string{
+		BuildPPSelectAnonymousCommand(),
+		BuildPPBindTunnelCommand(tunnelID),
+	}
+
+	if l2tp.Authentication != nil {
+		if l2tp.Authentication.RequestMethod != "" {
+			commands = append(commands, BuildPPAuthRequestCommand(l2tp.Authentication.RequestMethod))
+		}
+		if l2tp.Authentication.Method != "" {
+			commands = append(commands, BuildPPAuthAcceptCommand(l2tp.Authentication.Method))
+		}
+		for _, user := range l2tp.Authentication.Users {
+			commands = append(commands, BuildPPAuthUsernameCommand(user.Name, user.Password))
+		}
+	}
+
+	if l2tp.IPCPIPAddress {
+		commands = append(commands, "ppp ipcp ipaddress on")
+	}
+	if l2tp.IPCPMSExt {
+		commands = append(commands, "ppp ipcp msext on")
+	}
+	if l2tp.CCPTypeNone {
+		commands = append(commands, "ppp ccp type none")
+	}
+
+	if l2tp.IPPool != nil {
+		commands = append(commands, BuildIPPPRemotePoolCommand(l2tp.IPPool.Start, l2tp.IPPool.End))
+	}
+
+	if l2tp.MTU > 0 {
+		commands = append(commands, fmt.Sprintf("ip pp mtu %d", l2tp.MTU))
+	}
+
+	commands = append(commands,
+		"pp enable anonymous",
+		"pp select none",
+	)
+
+	return commands
+}
+
+// BuildIPsecAutoRefreshCommand builds the global ipsec auto refresh command
+// Command format: ipsec auto refresh on/off
+func BuildIPsecAutoRefreshCommand(enabled bool) string {
+	if enabled {
+		return "ipsec auto refresh on"
+	}
+	return "ipsec auto refresh off"
 }
 
 // isIKEv2ProposalSet returns true if any IKEv2 proposal settings are explicitly configured
@@ -737,11 +886,15 @@ func buildTunnelIPsecCommands(tunnelID int, ipsec *TunnelIPsec) []string {
 	}
 
 	// ipsec ike keepalive
-	if ipsec.Keepalive != nil && ipsec.Keepalive.Enabled {
-		if ipsec.Keepalive.Mode == "heartbeat" {
-			commands = append(commands, BuildIPsecIKEKeepaliveHeartbeatCommand(tunnelID, ipsec.Keepalive.Interval, ipsec.Keepalive.Retry))
-		} else {
-			commands = append(commands, BuildIPsecIKEKeepaliveCommand(tunnelID, ipsec.Keepalive.Interval, ipsec.Keepalive.Retry))
+	if ipsec.Keepalive != nil {
+		if ipsec.Keepalive.Enabled {
+			if ipsec.Keepalive.Mode == "heartbeat" {
+				commands = append(commands, BuildIPsecIKEKeepaliveHeartbeatCommand(tunnelID, ipsec.Keepalive.Interval, ipsec.Keepalive.Retry))
+			} else {
+				commands = append(commands, BuildIPsecIKEKeepaliveCommand(tunnelID, ipsec.Keepalive.Interval, ipsec.Keepalive.Retry))
+			}
+		} else if ipsec.Keepalive.Mode == "off" {
+			commands = append(commands, BuildIPsecIKEKeepaliveOffCommand(tunnelID))
 		}
 	}
 
