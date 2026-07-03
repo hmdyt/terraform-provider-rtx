@@ -1296,10 +1296,17 @@ type L2TPConfig struct {
 
 // L2TPAuth represents L2TPv2 authentication configuration
 type L2TPAuth struct {
-	Method        string `json:"method,omitempty"`         // pp auth accept: pap, chap, mschap, mschap-v2
-	RequestMethod string `json:"request_method,omitempty"` // pp auth request: pap, chap, mschap, mschap-v2
-	Username      string `json:"username,omitempty"`       // Local username
-	Password      string `json:"password,omitempty"`       // Local password
+	Method        string     `json:"method,omitempty"`         // pp auth accept: pap, chap, mschap, mschap-v2
+	RequestMethod string     `json:"request_method,omitempty"` // pp auth request: pap, chap, mschap, mschap-v2
+	Username      string     `json:"username,omitempty"`       // Local username (pp auth myname)
+	Password      string     `json:"password,omitempty"`       // Local password (pp auth myname)
+	Users         []L2TPUser `json:"users,omitempty"`          // Remote access users (pp auth username)
+}
+
+// L2TPUser represents a remote access VPN user (pp auth username)
+type L2TPUser struct {
+	Name     string `json:"name"`     // Username
+	Password string `json:"password"` // Password
 }
 
 // L2TPIPPool represents L2TPv2 IP pool configuration
@@ -1371,6 +1378,7 @@ type TunnelIPsec struct {
 	IKEv2Proposal     IKEv2Proposal         `json:"ikev2_proposal"`                 // IKE Phase 1 proposal
 	Transform         IPsecTransform        `json:"transform"`                      // IPsec Phase 2 transform
 	Keepalive         *TunnelIPsecKeepalive `json:"keepalive,omitempty"`            // DPD/heartbeat settings
+	AutoRefresh       bool                  `json:"auto_refresh,omitempty"`         // ipsec auto refresh on (global)
 	SecureFilterIn    []int                 `json:"secure_filter_in,omitempty"`     // ip tunnel secure filter in
 	SecureFilterOut   []int                 `json:"secure_filter_out,omitempty"`    // ip tunnel secure filter out
 	TCPMSSLimit       string                `json:"tcp_mss_limit,omitempty"`        // ip tunnel tcp mss limit
@@ -1403,6 +1411,10 @@ type TunnelL2TP struct {
 	// L2TPv2 specific (remote access)
 	Authentication *L2TPAuth   `json:"authentication,omitempty"` // PPP authentication
 	IPPool         *L2TPIPPool `json:"ip_pool,omitempty"`        // Client IP pool
+	IPCPIPAddress  bool        `json:"ipcp_ipaddress,omitempty"` // ppp ipcp ipaddress on
+	IPCPMSExt      bool        `json:"ipcp_msext,omitempty"`     // ppp ipcp msext on
+	CCPTypeNone    bool        `json:"ccp_type_none,omitempty"`  // ppp ccp type none
+	MTU            int         `json:"mtu,omitempty"`            // ip pp mtu
 }
 
 // TunnelL2TPKeepalive represents L2TP keepalive settings within a tunnel

@@ -205,6 +205,8 @@ func convertToParserTunnel(tunnel Tunnel) parsers.Tunnel {
 				Retry:    tunnel.IPsec.Keepalive.Retry,
 			}
 		}
+
+		result.IPsec.AutoRefresh = tunnel.IPsec.AutoRefresh
 	}
 
 	// Convert L2TP block
@@ -245,6 +247,12 @@ func convertToParserTunnel(tunnel Tunnel) parsers.Tunnel {
 				Username:      tunnel.L2TP.Authentication.Username,
 				Password:      tunnel.L2TP.Authentication.Password,
 			}
+			for _, user := range tunnel.L2TP.Authentication.Users {
+				result.L2TP.Authentication.Users = append(result.L2TP.Authentication.Users, parsers.L2TPUser{
+					Name:     user.Name,
+					Password: user.Password,
+				})
+			}
 		}
 
 		// Convert L2TP IP pool (L2TPv2)
@@ -254,6 +262,11 @@ func convertToParserTunnel(tunnel Tunnel) parsers.Tunnel {
 				End:   tunnel.L2TP.IPPool.End,
 			}
 		}
+
+		result.L2TP.IPCPIPAddress = tunnel.L2TP.IPCPIPAddress
+		result.L2TP.IPCPMSExt = tunnel.L2TP.IPCPMSExt
+		result.L2TP.CCPTypeNone = tunnel.L2TP.CCPTypeNone
+		result.L2TP.MTU = tunnel.L2TP.MTU
 	}
 
 	return result
@@ -321,6 +334,8 @@ func convertFromParserTunnel(p parsers.Tunnel) Tunnel {
 				Retry:    p.IPsec.Keepalive.Retry,
 			}
 		}
+
+		result.IPsec.AutoRefresh = p.IPsec.AutoRefresh
 	}
 
 	// Convert L2TP block
@@ -361,6 +376,12 @@ func convertFromParserTunnel(p parsers.Tunnel) Tunnel {
 				Username:      p.L2TP.Authentication.Username,
 				Password:      p.L2TP.Authentication.Password,
 			}
+			for _, user := range p.L2TP.Authentication.Users {
+				result.L2TP.Authentication.Users = append(result.L2TP.Authentication.Users, L2TPUser{
+					Name:     user.Name,
+					Password: user.Password,
+				})
+			}
 		}
 
 		// Convert L2TP IP pool (L2TPv2)
@@ -370,6 +391,11 @@ func convertFromParserTunnel(p parsers.Tunnel) Tunnel {
 				End:   p.L2TP.IPPool.End,
 			}
 		}
+
+		result.L2TP.IPCPIPAddress = p.L2TP.IPCPIPAddress
+		result.L2TP.IPCPMSExt = p.L2TP.IPCPMSExt
+		result.L2TP.CCPTypeNone = p.L2TP.CCPTypeNone
+		result.L2TP.MTU = p.L2TP.MTU
 	}
 
 	return result
