@@ -761,10 +761,8 @@ func validateConfig(config *Config) error {
 	if config.Username == "" {
 		return fmt.Errorf("username is required")
 	}
-	// Password is required only if no SSH key is provided
-	if config.Password == "" && config.PrivateKey == "" && config.PrivateKeyFile == "" {
-		return fmt.Errorf("password or private_key/private_key_file is required")
-	}
+	// An empty password is allowed: RTX routers accept login users with an
+	// empty password, so password auth is attempted with whatever value is set.
 	if config.Port <= 0 || config.Port > 65535 {
 		return fmt.Errorf("invalid port number: %d", config.Port)
 	}

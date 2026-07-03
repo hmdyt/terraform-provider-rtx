@@ -152,8 +152,10 @@ func (d *sshDialer) buildAuthMethods(config *Config) []ssh.AuthMethod {
 		}
 	}
 
-	// Always include password authentication as fallback if password is set
-	if config.Password != "" {
+	// Always include password authentication as fallback if password is set.
+	// An empty password is still offered when no explicit key is configured,
+	// since RTX routers accept login users with an empty password.
+	if config.Password != "" || !hasExplicitKey {
 		logger.Debug().Msg("Password authentication configured")
 		methods = append(methods, ssh.Password(config.Password))
 		// Also add keyboard-interactive for RTX router compatibility

@@ -115,14 +115,14 @@ func TestNewClient(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "missing password and private key",
+			name: "empty password without private key (RTX allows empty login password)",
 			config: &Config{
 				Host:     "192.168.1.1",
 				Port:     22,
 				Username: "admin",
 				Timeout:  30,
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "private_key without password",
