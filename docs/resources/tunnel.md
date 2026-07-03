@@ -109,6 +109,8 @@ Optional:
 - `ike_remote_name` (String) IKE remote name value.
 - `ike_remote_name_type` (String) IKE remote name type: 'ipv4-addr', 'fqdn', 'user-fqdn', 'ipv6-addr', 'key-id', 'l2tpv3'.
 - `ipsec_transform` (Block, Optional) IPsec Phase 2 transform settings. (see [below for nested schema](#nestedblock--ipsec--ipsec_transform))
+- `auto_refresh` (Boolean) Generate the global 'ipsec auto refresh on' command (required for automatic SA rekeying). Note: this is a router-wide setting shared by all IPsec tunnels.
+- `ikev2_proposal` (Block, Optional) IKE Phase 1 proposal settings (ipsec ike encryption/hash/group). When omitted, the router's default negotiation behavior is used. (see [below for nested schema](#nestedblock--ipsec--ikev2_proposal))
 - `ipsec_tunnel_id` (Number) IPsec tunnel ID (ipsec tunnel N). Defaults to tunnel_id if not specified.
 - `keepalive` (Block, Optional) IPsec keepalive/DPD settings. (see [below for nested schema](#nestedblock--ipsec--keepalive))
 - `local_address` (String) Local IKE endpoint address.
@@ -117,6 +119,22 @@ Optional:
 - `secure_filter_in` (List of Number) Inbound security filter IDs.
 - `secure_filter_out` (List of Number) Outbound security filter IDs.
 - `tcp_mss_limit` (String) TCP MSS limit: 'auto' or numeric value.
+
+<a id="nestedblock--ipsec--ikev2_proposal"></a>
+### Nested Schema for `ipsec.ikev2_proposal`
+
+Optional:
+
+- `encryption_3des` (Boolean) Use 3DES encryption.
+- `encryption_aes128` (Boolean) Use AES-128 encryption (aes-cbc).
+- `encryption_aes256` (Boolean) Use AES-256 encryption.
+- `group_five` (Boolean) Use DH group 5 (modp1536).
+- `group_fourteen` (Boolean) Use DH group 14 (modp2048).
+- `group_two` (Boolean) Use DH group 2 (modp1024).
+- `integrity_md5` (Boolean) Use MD5 integrity.
+- `integrity_sha1` (Boolean) Use SHA-1 integrity.
+- `integrity_sha256` (Boolean) Use SHA-256 integrity.
+
 
 <a id="nestedblock--ipsec--ipsec_transform"></a>
 ### Nested Schema for `ipsec.ipsec_transform`
@@ -139,7 +157,7 @@ Optional:
 
 - `enabled` (Boolean) Enable keepalive.
 - `interval` (Number) Keepalive interval in seconds.
-- `mode` (String) Keepalive mode: 'dpd' or 'heartbeat'.
+- `mode` (String) Keepalive mode: 'dpd', 'heartbeat', or 'off'. 'off' generates an explicit 'ipsec ike keepalive use N off' (requires enabled = false).
 - `retry` (Number) Retry count.
 
 
@@ -150,8 +168,14 @@ Optional:
 Optional:
 
 - `always_on` (Boolean) Keep connection always active.
+- `authentication` (Block, Optional) Anonymous PP authentication for L2TPv2 remote access (pp auth request/accept/username). (see [below for nested schema](#nestedblock--l2tp--authentication))
+- `ccp_type_none` (Boolean) Generate 'ppp ccp type none' in the anonymous PP context (L2TPv2 remote access).
 - `disconnect_time` (Number) Disconnect time in seconds (0 = off).
 - `hostname` (String) L2TP hostname for negotiation.
+- `ip_pool` (Block, Optional) Client IP address pool for L2TPv2 remote access (ip pp remote address pool). (see [below for nested schema](#nestedblock--l2tp--ip_pool))
+- `ipcp_ipaddress` (Boolean) Generate 'ppp ipcp ipaddress on' in the anonymous PP context (L2TPv2 remote access).
+- `ipcp_msext` (Boolean) Generate 'ppp ipcp msext on' in the anonymous PP context (L2TPv2 remote access).
+- `mtu` (Number) MTU for the anonymous PP interface (ip pp mtu, L2TPv2 remote access).
 - `keepalive` (Block, Optional) L2TP keepalive settings. (see [below for nested schema](#nestedblock--l2tp--keepalive))
 - `keepalive_log` (Boolean) Enable L2TP keepalive logging.
 - `local_router_id` (String) Local router ID (L2TPv3).
@@ -159,6 +183,33 @@ Optional:
 - `remote_router_id` (String) Remote router ID (L2TPv3).
 - `syslog` (Boolean) Enable L2TP syslog.
 - `tunnel_auth` (Block, Optional) L2TP tunnel authentication. (see [below for nested schema](#nestedblock--l2tp--tunnel_auth))
+
+<a id="nestedblock--l2tp--authentication"></a>
+### Nested Schema for `l2tp.authentication`
+
+Optional:
+
+- `method` (String) Authentication method to accept (pp auth accept): 'pap', 'chap', 'mschap', 'mschap-v2'.
+- `request_method` (String) Authentication method to request from clients (pp auth request): 'pap', 'chap', 'mschap', 'mschap-v2'.
+- `user` (Block List) Remote access VPN user (pp auth username). Passwords are write-only and not read back from the router. (see [below for nested schema](#nestedblock--l2tp--authentication--user))
+
+<a id="nestedblock--l2tp--authentication--user"></a>
+### Nested Schema for `l2tp.authentication.user`
+
+Required:
+
+- `password` (String, Sensitive) Password.
+- `username` (String) Username.
+
+
+<a id="nestedblock--l2tp--ip_pool"></a>
+### Nested Schema for `l2tp.ip_pool`
+
+Optional:
+
+- `end` (String) Pool end address.
+- `start` (String) Pool start address.
+
 
 <a id="nestedblock--l2tp--keepalive"></a>
 ### Nested Schema for `l2tp.keepalive`

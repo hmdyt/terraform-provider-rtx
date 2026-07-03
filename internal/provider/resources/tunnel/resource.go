@@ -153,6 +153,10 @@ func (r *TunnelResource) Schema(ctx context.Context, req resource.SchemaRequest,
 						Computed:    true,
 						Default:     booldefault.StaticBool(false),
 					},
+					"auto_refresh": schema.BoolAttribute{
+						Description: "Generate the global 'ipsec auto refresh on' command (required for automatic SA rekeying). Note: this is a router-wide setting shared by all IPsec tunnels.",
+						Optional:    true,
+					},
 					"ike_remote_name": schema.StringAttribute{
 						Description: "IKE remote name value.",
 						Optional:    true,
@@ -184,6 +188,65 @@ func (r *TunnelResource) Schema(ctx context.Context, req resource.SchemaRequest,
 					},
 				},
 				Blocks: map[string]schema.Block{
+					"ikev2_proposal": schema.SingleNestedBlock{
+						Description: "IKE Phase 1 proposal settings (ipsec ike encryption/hash/group). When omitted, the router's default negotiation behavior is used.",
+						Attributes: map[string]schema.Attribute{
+							"encryption_aes256": schema.BoolAttribute{
+								Description: "Use AES-256 encryption.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"encryption_aes128": schema.BoolAttribute{
+								Description: "Use AES-128 encryption (aes-cbc).",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"encryption_3des": schema.BoolAttribute{
+								Description: "Use 3DES encryption.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"integrity_sha256": schema.BoolAttribute{
+								Description: "Use SHA-256 integrity.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"integrity_sha1": schema.BoolAttribute{
+								Description: "Use SHA-1 integrity.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"integrity_md5": schema.BoolAttribute{
+								Description: "Use MD5 integrity.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"group_fourteen": schema.BoolAttribute{
+								Description: "Use DH group 14 (modp2048).",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"group_five": schema.BoolAttribute{
+								Description: "Use DH group 5 (modp1536).",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"group_two": schema.BoolAttribute{
+								Description: "Use DH group 2 (modp1024).",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+						},
+					},
 					"ipsec_transform": schema.SingleNestedBlock{
 						Description: "IPsec Phase 2 transform settings.",
 						Attributes: map[string]schema.Attribute{
@@ -244,12 +307,12 @@ func (r *TunnelResource) Schema(ctx context.Context, req resource.SchemaRequest,
 								Default:     booldefault.StaticBool(false),
 							},
 							"mode": schema.StringAttribute{
-								Description: "Keepalive mode: 'dpd' or 'heartbeat'.",
+								Description: "Keepalive mode: 'dpd', 'heartbeat', or 'off'. 'off' generates an explicit 'ipsec ike keepalive use N off' (requires enabled = false).",
 								Optional:    true,
 								Computed:    true,
 								Default:     stringdefault.StaticString("dpd"),
 								Validators: []validator.String{
-									stringvalidator.OneOf("dpd", "heartbeat"),
+									stringvalidator.OneOf("dpd", "heartbeat", "off"),
 								},
 							},
 							"interval": schema.Int64Attribute{
@@ -317,8 +380,80 @@ func (r *TunnelResource) Schema(ctx context.Context, req resource.SchemaRequest,
 						Computed:    true,
 						Default:     booldefault.StaticBool(false),
 					},
+					"ipcp_ipaddress": schema.BoolAttribute{
+						Description: "Generate 'ppp ipcp ipaddress on' in the anonymous PP context (L2TPv2 remote access).",
+						Optional:    true,
+						Computed:    true,
+						Default:     booldefault.StaticBool(false),
+					},
+					"ipcp_msext": schema.BoolAttribute{
+						Description: "Generate 'ppp ipcp msext on' in the anonymous PP context (L2TPv2 remote access).",
+						Optional:    true,
+						Computed:    true,
+						Default:     booldefault.StaticBool(false),
+					},
+					"ccp_type_none": schema.BoolAttribute{
+						Description: "Generate 'ppp ccp type none' in the anonymous PP context (L2TPv2 remote access).",
+						Optional:    true,
+						Computed:    true,
+						Default:     booldefault.StaticBool(false),
+					},
+					"mtu": schema.Int64Attribute{
+						Description: "MTU for the anonymous PP interface (ip pp mtu, L2TPv2 remote access).",
+						Optional:    true,
+					},
 				},
 				Blocks: map[string]schema.Block{
+					"authentication": schema.SingleNestedBlock{
+						Description: "Anonymous PP authentication for L2TPv2 remote access (pp auth request/accept/username).",
+						Attributes: map[string]schema.Attribute{
+							"method": schema.StringAttribute{
+								Description: "Authentication method to accept (pp auth accept): 'pap', 'chap', 'mschap', 'mschap-v2'.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf("pap", "chap", "mschap", "mschap-v2"),
+								},
+							},
+							"request_method": schema.StringAttribute{
+								Description: "Authentication method to request from clients (pp auth request): 'pap', 'chap', 'mschap', 'mschap-v2'.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf("pap", "chap", "mschap", "mschap-v2"),
+								},
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"user": schema.ListNestedBlock{
+								Description: "Remote access VPN user (pp auth username). Passwords are write-only and not read back from the router.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"username": schema.StringAttribute{
+											Description: "Username.",
+											Required:    true,
+										},
+										"password": schema.StringAttribute{
+											Description: "Password.",
+											Required:    true,
+											Sensitive:   true,
+										},
+									},
+								},
+							},
+						},
+					},
+					"ip_pool": schema.SingleNestedBlock{
+						Description: "Client IP address pool for L2TPv2 remote access (ip pp remote address pool).",
+						Attributes: map[string]schema.Attribute{
+							"start": schema.StringAttribute{
+								Description: "Pool start address.",
+								Optional:    true,
+							},
+							"end": schema.StringAttribute{
+								Description: "Pool end address.",
+								Optional:    true,
+							},
+						},
+					},
 					"tunnel_auth": schema.SingleNestedBlock{
 						Description: "L2TP tunnel authentication.",
 						Attributes: map[string]schema.Attribute{

@@ -29,6 +29,7 @@ type TunnelIPsecModel struct {
 	RemoteAddress     types.String               `tfsdk:"remote_address"`
 	PreSharedKey      types.String               `tfsdk:"pre_shared_key"`
 	NATTraversal      types.Bool                 `tfsdk:"nat_traversal"`
+	AutoRefresh       types.Bool                 `tfsdk:"auto_refresh"`
 	IKERemoteName     types.String               `tfsdk:"ike_remote_name"`
 	IKERemoteNameType types.String               `tfsdk:"ike_remote_name_type"`
 	IKEKeepaliveLog   types.Bool                 `tfsdk:"ike_keepalive_log"`
@@ -36,8 +37,22 @@ type TunnelIPsecModel struct {
 	SecureFilterIn    types.List                 `tfsdk:"secure_filter_in"`
 	SecureFilterOut   types.List                 `tfsdk:"secure_filter_out"`
 	TCPMSSLimit       types.String               `tfsdk:"tcp_mss_limit"`
+	IKEv2Proposal     *TunnelIKEv2ProposalModel  `tfsdk:"ikev2_proposal"`
 	IPsecTransform    *IPsecTransformModel       `tfsdk:"ipsec_transform"`
 	Keepalive         *TunnelIPsecKeepaliveModel `tfsdk:"keepalive"`
+}
+
+// TunnelIKEv2ProposalModel describes the IKE Phase 1 proposal nested block.
+type TunnelIKEv2ProposalModel struct {
+	EncryptionAES256 types.Bool `tfsdk:"encryption_aes256"`
+	EncryptionAES128 types.Bool `tfsdk:"encryption_aes128"`
+	Encryption3DES   types.Bool `tfsdk:"encryption_3des"`
+	IntegritySHA256  types.Bool `tfsdk:"integrity_sha256"`
+	IntegritySHA1    types.Bool `tfsdk:"integrity_sha1"`
+	IntegrityMD5     types.Bool `tfsdk:"integrity_md5"`
+	GroupFourteen    types.Bool `tfsdk:"group_fourteen"`
+	GroupFive        types.Bool `tfsdk:"group_five"`
+	GroupTwo         types.Bool `tfsdk:"group_two"`
 }
 
 // TunnelIPsecKeepaliveModel describes the IPsec keepalive nested block.
@@ -69,8 +84,33 @@ type TunnelL2TPModel struct {
 	DisconnectTime types.Int64               `tfsdk:"disconnect_time"`
 	KeepaliveLog   types.Bool                `tfsdk:"keepalive_log"`
 	Syslog         types.Bool                `tfsdk:"syslog"`
+	IPCPIPAddress  types.Bool                `tfsdk:"ipcp_ipaddress"`
+	IPCPMSExt      types.Bool                `tfsdk:"ipcp_msext"`
+	CCPTypeNone    types.Bool                `tfsdk:"ccp_type_none"`
+	MTU            types.Int64               `tfsdk:"mtu"`
 	TunnelAuth     *TunnelL2TPAuthModel      `tfsdk:"tunnel_auth"`
 	Keepalive      *TunnelL2TPKeepaliveModel `tfsdk:"keepalive"`
+	Authentication *TunnelL2TPPPAuthModel    `tfsdk:"authentication"`
+	IPPool         *TunnelL2TPIPPoolModel    `tfsdk:"ip_pool"`
+}
+
+// TunnelL2TPPPAuthModel describes the anonymous PP authentication nested block (L2TPv2 remote access).
+type TunnelL2TPPPAuthModel struct {
+	Method        types.String          `tfsdk:"method"`
+	RequestMethod types.String          `tfsdk:"request_method"`
+	Users         []TunnelL2TPUserModel `tfsdk:"user"`
+}
+
+// TunnelL2TPUserModel describes a remote access VPN user (pp auth username).
+type TunnelL2TPUserModel struct {
+	Username types.String `tfsdk:"username"`
+	Password types.String `tfsdk:"password"`
+}
+
+// TunnelL2TPIPPoolModel describes the client IP pool nested block (L2TPv2 remote access).
+type TunnelL2TPIPPoolModel struct {
+	Start types.String `tfsdk:"start"`
+	End   types.String `tfsdk:"end"`
 }
 
 // TunnelL2TPAuthModel describes the L2TP tunnel auth nested block.
@@ -110,6 +150,7 @@ func (m *TunnelModel) ToClient() client.Tunnel {
 			RemoteAddress:     fwhelpers.GetStringValue(m.IPsec.RemoteAddress),
 			PreSharedKey:      fwhelpers.GetStringValue(m.IPsec.PreSharedKey),
 			NATTraversal:      fwhelpers.GetBoolValue(m.IPsec.NATTraversal),
+			AutoRefresh:       fwhelpers.GetBoolValue(m.IPsec.AutoRefresh),
 			IKERemoteName:     fwhelpers.GetStringValue(m.IPsec.IKERemoteName),
 			IKERemoteNameType: fwhelpers.GetStringValue(m.IPsec.IKERemoteNameType),
 			IKEKeepaliveLog:   fwhelpers.GetBoolValue(m.IPsec.IKEKeepaliveLog),
@@ -117,6 +158,21 @@ func (m *TunnelModel) ToClient() client.Tunnel {
 			SecureFilterIn:    fwhelpers.ListToIntSlice(m.IPsec.SecureFilterIn),
 			SecureFilterOut:   fwhelpers.ListToIntSlice(m.IPsec.SecureFilterOut),
 			TCPMSSLimit:       fwhelpers.GetStringValue(m.IPsec.TCPMSSLimit),
+		}
+
+		// Handle IKE Phase 1 proposal
+		if m.IPsec.IKEv2Proposal != nil {
+			tunnel.IPsec.IKEv2Proposal = client.IKEv2Proposal{
+				EncryptionAES256: fwhelpers.GetBoolValue(m.IPsec.IKEv2Proposal.EncryptionAES256),
+				EncryptionAES128: fwhelpers.GetBoolValue(m.IPsec.IKEv2Proposal.EncryptionAES128),
+				Encryption3DES:   fwhelpers.GetBoolValue(m.IPsec.IKEv2Proposal.Encryption3DES),
+				IntegritySHA256:  fwhelpers.GetBoolValue(m.IPsec.IKEv2Proposal.IntegritySHA256),
+				IntegritySHA1:    fwhelpers.GetBoolValue(m.IPsec.IKEv2Proposal.IntegritySHA1),
+				IntegrityMD5:     fwhelpers.GetBoolValue(m.IPsec.IKEv2Proposal.IntegrityMD5),
+				GroupFourteen:    fwhelpers.GetBoolValue(m.IPsec.IKEv2Proposal.GroupFourteen),
+				GroupFive:        fwhelpers.GetBoolValue(m.IPsec.IKEv2Proposal.GroupFive),
+				GroupTwo:         fwhelpers.GetBoolValue(m.IPsec.IKEv2Proposal.GroupTwo),
+			}
 		}
 
 		// Handle IPsec transform
@@ -154,6 +210,32 @@ func (m *TunnelModel) ToClient() client.Tunnel {
 			DisconnectTime: fwhelpers.GetInt64Value(m.L2TP.DisconnectTime),
 			KeepaliveLog:   fwhelpers.GetBoolValue(m.L2TP.KeepaliveLog),
 			SyslogEnabled:  fwhelpers.GetBoolValue(m.L2TP.Syslog),
+			IPCPIPAddress:  fwhelpers.GetBoolValue(m.L2TP.IPCPIPAddress),
+			IPCPMSExt:      fwhelpers.GetBoolValue(m.L2TP.IPCPMSExt),
+			CCPTypeNone:    fwhelpers.GetBoolValue(m.L2TP.CCPTypeNone),
+			MTU:            fwhelpers.GetInt64Value(m.L2TP.MTU),
+		}
+
+		// Handle anonymous PP authentication (L2TPv2 remote access)
+		if m.L2TP.Authentication != nil {
+			tunnel.L2TP.Authentication = &client.L2TPAuth{
+				Method:        fwhelpers.GetStringValue(m.L2TP.Authentication.Method),
+				RequestMethod: fwhelpers.GetStringValue(m.L2TP.Authentication.RequestMethod),
+			}
+			for _, user := range m.L2TP.Authentication.Users {
+				tunnel.L2TP.Authentication.Users = append(tunnel.L2TP.Authentication.Users, client.L2TPUser{
+					Name:     fwhelpers.GetStringValue(user.Username),
+					Password: fwhelpers.GetStringValue(user.Password),
+				})
+			}
+		}
+
+		// Handle client IP pool (L2TPv2 remote access)
+		if m.L2TP.IPPool != nil {
+			tunnel.L2TP.IPPool = &client.L2TPIPPool{
+				Start: fwhelpers.GetStringValue(m.L2TP.IPPool.Start),
+				End:   fwhelpers.GetStringValue(m.L2TP.IPPool.End),
+			}
 		}
 
 		// Handle L2TP tunnel auth
@@ -197,6 +279,10 @@ func (m *TunnelModel) FromClient(tunnel *client.Tunnel) {
 		m.IPsec.RemoteAddress = fwhelpers.StringValueOrNull(tunnel.IPsec.RemoteAddress)
 		// Note: pre_shared_key is WriteOnly, so we don't read it back
 		m.IPsec.NATTraversal = types.BoolValue(tunnel.IPsec.NATTraversal)
+		// auto_refresh maps to a global command; only reflect it when configured
+		if !m.IPsec.AutoRefresh.IsNull() {
+			m.IPsec.AutoRefresh = types.BoolValue(tunnel.IPsec.AutoRefresh)
+		}
 		m.IPsec.IKERemoteName = fwhelpers.StringValueOrNull(tunnel.IPsec.IKERemoteName)
 		m.IPsec.IKERemoteNameType = fwhelpers.StringValueOrNull(tunnel.IPsec.IKERemoteNameType)
 		m.IPsec.IKEKeepaliveLog = types.BoolValue(tunnel.IPsec.IKEKeepaliveLog)
@@ -215,6 +301,20 @@ func (m *TunnelModel) FromClient(tunnel *client.Tunnel) {
 			m.IPsec.SecureFilterOut = fwhelpers.IntSliceToList(tunnel.IPsec.SecureFilterOut)
 		}
 		m.IPsec.TCPMSSLimit = fwhelpers.StringValueOrNull(tunnel.IPsec.TCPMSSLimit)
+
+		// Handle IKE Phase 1 proposal: only reflect when configured, so that
+		// omitting the block keeps the router's default negotiation behavior
+		if m.IPsec.IKEv2Proposal != nil {
+			m.IPsec.IKEv2Proposal.EncryptionAES256 = types.BoolValue(tunnel.IPsec.IKEv2Proposal.EncryptionAES256)
+			m.IPsec.IKEv2Proposal.EncryptionAES128 = types.BoolValue(tunnel.IPsec.IKEv2Proposal.EncryptionAES128)
+			m.IPsec.IKEv2Proposal.Encryption3DES = types.BoolValue(tunnel.IPsec.IKEv2Proposal.Encryption3DES)
+			m.IPsec.IKEv2Proposal.IntegritySHA256 = types.BoolValue(tunnel.IPsec.IKEv2Proposal.IntegritySHA256)
+			m.IPsec.IKEv2Proposal.IntegritySHA1 = types.BoolValue(tunnel.IPsec.IKEv2Proposal.IntegritySHA1)
+			m.IPsec.IKEv2Proposal.IntegrityMD5 = types.BoolValue(tunnel.IPsec.IKEv2Proposal.IntegrityMD5)
+			m.IPsec.IKEv2Proposal.GroupFourteen = types.BoolValue(tunnel.IPsec.IKEv2Proposal.GroupFourteen)
+			m.IPsec.IKEv2Proposal.GroupFive = types.BoolValue(tunnel.IPsec.IKEv2Proposal.GroupFive)
+			m.IPsec.IKEv2Proposal.GroupTwo = types.BoolValue(tunnel.IPsec.IKEv2Proposal.GroupTwo)
+		}
 
 		// Handle IPsec transform
 		if m.IPsec.IPsecTransform == nil {
@@ -254,6 +354,30 @@ func (m *TunnelModel) FromClient(tunnel *client.Tunnel) {
 		m.L2TP.DisconnectTime = types.Int64Value(int64(tunnel.L2TP.DisconnectTime))
 		m.L2TP.KeepaliveLog = types.BoolValue(tunnel.L2TP.KeepaliveLog)
 		m.L2TP.Syslog = types.BoolValue(tunnel.L2TP.SyslogEnabled)
+		m.L2TP.IPCPIPAddress = types.BoolValue(tunnel.L2TP.IPCPIPAddress)
+		m.L2TP.IPCPMSExt = types.BoolValue(tunnel.L2TP.IPCPMSExt)
+		m.L2TP.CCPTypeNone = types.BoolValue(tunnel.L2TP.CCPTypeNone)
+		m.L2TP.MTU = fwhelpers.Int64ValueOrNull(tunnel.L2TP.MTU)
+
+		// Handle anonymous PP authentication (L2TPv2 remote access)
+		// User passwords are not read back (plaintext in show config); keep
+		// the configured user list from state and only refresh the methods.
+		if tunnel.L2TP.Authentication != nil {
+			if m.L2TP.Authentication == nil {
+				m.L2TP.Authentication = &TunnelL2TPPPAuthModel{}
+			}
+			m.L2TP.Authentication.Method = fwhelpers.StringValueOrNull(tunnel.L2TP.Authentication.Method)
+			m.L2TP.Authentication.RequestMethod = fwhelpers.StringValueOrNull(tunnel.L2TP.Authentication.RequestMethod)
+		}
+
+		// Handle client IP pool (L2TPv2 remote access)
+		if tunnel.L2TP.IPPool != nil {
+			if m.L2TP.IPPool == nil {
+				m.L2TP.IPPool = &TunnelL2TPIPPoolModel{}
+			}
+			m.L2TP.IPPool.Start = types.StringValue(tunnel.L2TP.IPPool.Start)
+			m.L2TP.IPPool.End = types.StringValue(tunnel.L2TP.IPPool.End)
+		}
 
 		// Handle L2TP tunnel auth
 		if tunnel.L2TP.TunnelAuth != nil {
