@@ -914,7 +914,7 @@ func TestValidateIPFilterNumber(t *testing.T) {
 		},
 		{
 			name:    "valid maximum",
-			number:  65535,
+			number:  21474836,
 			wantErr: false,
 		},
 		{
@@ -926,25 +926,25 @@ func TestValidateIPFilterNumber(t *testing.T) {
 			name:    "zero",
 			number:  0,
 			wantErr: true,
-			errMsg:  "filter number must be between 1 and 65535",
+			errMsg:  "filter number must be between 1 and 21474836",
 		},
 		{
 			name:    "negative",
 			number:  -1,
 			wantErr: true,
-			errMsg:  "filter number must be between 1 and 65535",
+			errMsg:  "filter number must be between 1 and 21474836",
 		},
 		{
-			name:    "too large (200000)",
+			name:    "valid six-digit (200000)",
 			number:  200000,
-			wantErr: true,
-			errMsg:  "filter number must be between 1 and 65535",
+			wantErr: false,
+			errMsg:  "filter number must be between 1 and 21474836",
 		},
 		{
-			name:    "too large (500000)",
-			number:  500000,
+			name:    "too large (21474837)",
+			number:  21474837,
 			wantErr: true,
-			errMsg:  "filter number must be between 1 and 65535",
+			errMsg:  "filter number must be between 1 and 21474836",
 		},
 	}
 
@@ -1088,7 +1088,7 @@ func TestValidateIPFilter(t *testing.T) {
 				Protocol:      "tcp",
 			},
 			wantErr: true,
-			errMsg:  "filter number must be between 1 and 65535",
+			errMsg:  "filter number must be between 1 and 21474836",
 		},
 		{
 			name: "invalid action",
@@ -1208,7 +1208,7 @@ func TestValidateIPFilterDynamic(t *testing.T) {
 				Protocol: "ftp",
 			},
 			wantErr: true,
-			errMsg:  "filter number must be between 1 and 65535",
+			errMsg:  "filter number must be between 1 and 21474836",
 		},
 		{
 			name: "empty source",

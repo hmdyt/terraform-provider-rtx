@@ -452,10 +452,10 @@ func BuildShowIPFilterByNumberCommand(number int) string {
 }
 
 // ValidateIPFilterNumber validates that the filter number is in valid range.
-// Reference: RTX Command Reference - filter numbers are 1-65535
+// Reference: RTX Command Reference - static filter numbers are 1-21474836
 func ValidateIPFilterNumber(n int) error {
-	if n < 1 || n > 65535 {
-		return fmt.Errorf("filter number must be between 1 and 65535, got %d", n)
+	if n < 1 || n > 21474836 {
+		return fmt.Errorf("filter number must be between 1 and 21474836, got %d", n)
 	}
 	return nil
 }
